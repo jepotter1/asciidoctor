@@ -306,5 +306,18 @@ module Helpers
   rescue
     raise ::NameError, %(Could not resolve class for name: #{qualified_name})
   end
+
+  # Internal: Sanitizes SGML (HTML/XML) markup.
+  #
+  # str - The String to sanitize
+  #
+  # Returns the sanitized String
+  def sanitize str
+    if str.include? '<'
+      str.gsub(XmlSanitizeRx, '').squeeze(' ').strip
+    else
+      str
+    end
+  end
 end
 end
