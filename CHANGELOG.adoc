@@ -43,6 +43,7 @@ Compliance::
   * Disallow the use of dot (`.`) in the name of a named element attribute (#4147)
   * Disallow the use of the left square bracket in an attribute list on formatted text (#4306)
   * Update stylesheet to use break-after in place of page-break-before/after/inside (#3466)
+  * Encode spaces in mailto links as %20, in accordance with RFC 3986, instead of using + (#4576)
   * Drop support for Ruby < 2.7 and JRuby < 9.2
   * Update latest JRuby in CI workflow to 9.4.2.0
 
@@ -65,11 +66,15 @@ Improvements::
   * Remove empty line at top of table cells in manpage output (#4482) (*@strager*)
   * Return `nil` if name passed to `Asciidoctor::SafeMode.value_for_name` is not recognized (#3526)
   * Modify default stylesheet to honor text-* roles on quote blocks
+  * Log error when an incomplete row is detected at the end of a table (#4573)
 
 Bug Fixes::
 
   * Don't leave behind empty line inside skipped preprocessor conditional (#4580)
   * Don't duplicate block attribute line above detached block that breaks a dlist; fixes duplicate role on detached block (#4565)
+  * Don't crash when parsing xref shorthand if target starts with URL protocol and text is offset by space (#4570)
+  * Only drop current row if colspan of last cell exceeds specified number of columns (#4587)
+  * Drop last row if colspan of last cell in table exceeds specified number of columns (#4587)
 
 == 2.0.22 (2024-03-08) - @mojavelinux
 

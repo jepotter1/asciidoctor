@@ -105,6 +105,16 @@ context 'Links' do
     assert_xpath '//p[text()="<http://asciidoc.org>"]', convert_string('<\\http://asciidoc.org>'), 1
   end
 
+  test 'xref shorthand with target that starts with URL protocol and has space after comma should not crash parser' do
+    output = convert_string_to_embedded '<<https://example.com, Example>>'
+    assert_include '<a href="#https://example.com">Example</a>', output
+  end
+
+  test 'xref shorthand with link macro as target should be ignored' do
+    output = convert_string_to_embedded '<<link:https://example.com[], Example>>'
+    assert_include '&lt;&lt;<a href="https://example.com" class="bare">https://example.com</a>, Example&gt;&gt;', output
+  end
+
   test 'autolink containing text enclosed in angle brackets' do
     output = convert_string_to_embedded 'https://github.com/<org>/'
     assert_include '<a href="https://github.com/&lt;org&gt;/" class="bare">https://github.com/&lt;org&gt;/</a>', output
@@ -193,16 +203,31 @@ context 'Links' do
   end
 
   test 'URI scheme with trailing characters should not be converted to a link' do
-    input_sources = %w(
-      (https://)
+    comma = ','
+    input_sources = %W(
       http://;
       file://:
+      irc://#{comma}
+    )
+    expected_outputs = %W(
+      http://;
+      file://:
+      irc://#{comma}
+    )
+    input_sources.each_with_index do |input_source, i|
+      expected_output = expected_outputs[i]
+      actual = block_from_string input_source
+      assert_equal expected_output, actual.content
+    end
+  end
+
+  test 'bare URI scheme enclosed in brackets should not be converted to link' do
+    input_sources = %w(
+      (https://)
       <ftp://>
     )
     expected_outputs = %w(
       (https://)
-      http://;
-      file://:
       &lt;ftp://&gt;
     )
     input_sources.each_with_index do |input_source, i|

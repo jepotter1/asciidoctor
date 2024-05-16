@@ -1194,7 +1194,7 @@ context 'Tables' do
       assert_xpath '((//row)[1]/entry)[3][@namest="col_4"][@nameend="col_5"]', output, 1
     end
 
-    test 'ignores cell with colspan that exceeds colspec' do
+    test 'should drop row but preserve remaining rows after cell with colspan exceeds number of columns' do
       input = <<~'EOS'
       [cols=2*]
       |===
@@ -1208,18 +1208,84 @@ context 'Tables' do
       using_memory_logger do |logger|
         output = convert_string_to_embedded input
         assert_css 'table', output, 1
-        assert_css 'table *', output, 0
-        assert_message logger, :ERROR, '<stdin>: line 5: dropping cell because it exceeds specified number of columns', Hash
+        assert_css 'table tr', output, 1
+        assert_xpath '/table/tbody/tr/td[1]/p[text()="B"]', output, 1
+        assert_message logger, :ERROR, '<stdin>: line 3: dropping cell because it exceeds specified number of columns', Hash
       end
     end
 
-    test 'paragraph and literal repeated content' do
+    test 'should drop last row if last cell in table has colspan that exceeds specified number of columns' do
+      input = <<~'EOS'
+      [cols=2*]
+      |===
+      |a 2+|b
+      |===
+      EOS
+      using_memory_logger do |logger|
+        output = convert_string_to_embedded input
+        assert_css 'table', output, 1
+        assert_css 'table *', output, 0
+        assert_message logger, :ERROR, '<stdin>: line 3: dropping cell because it exceeds specified number of columns', Hash
+      end
+    end
+
+    test 'should drop last row if last cell in table has colspan that exceeds implicit number of columns' do
+      input = <<~'EOS'
+      |===
+      |a |b
+      |c 2+|d
+      |===
+      EOS
+      using_memory_logger do |logger|
+        output = convert_string_to_embedded input
+        assert_css 'table', output, 1
+        assert_css 'table tr', output, 1
+        assert_xpath '/table/tbody/tr/td[1]/p[text()="a"]', output, 1
+        assert_message logger, :ERROR, '<stdin>: line 3: dropping cell because it exceeds specified number of columns', Hash
+      end
+    end
+
+    test 'should take colspan into account when taking cells for row' do
+      input = <<~'EOS'
+      [cols=7]
+      |===
+      2+|a 2+|b 2+|c 2+|d
+      |e |f |g |h |i |j |k
+      |===
+      EOS
+      using_memory_logger do |logger|
+        output = convert_string_to_embedded input
+        assert_css 'table', output, 1
+        assert_css 'table tr', output, 1
+        assert_css 'table tr td', output, 7
+        assert_message logger, :ERROR, '<stdin>: line 3: dropping cell because it exceeds specified number of columns', Hash
+      end
+    end
+
+    test 'should drop incomplete row at end of table and log an error' do
+      input = <<~'EOS'
+      [cols=2*]
+      |===
+      |a |b
+      |c |d
+      |e
+      |===
+      EOS
+      using_memory_logger do |logger|
+        output = convert_string_to_embedded input
+        assert_css 'table', output, 1
+        assert_css 'table tr', output, 2
+        assert_message logger, :ERROR, '<stdin>: line 5: dropping cells from incomplete row detected end of table', Hash
+      end
+    end
+
+    test 'should apply cell style for column to repeated content' do
       input = <<~'EOS'
       [cols=",^l"]
       |===
       |Paragraphs |Literal
 
-      3*|The discussion about what is good,
+      2*|The discussion about what is good,
       what is beautiful, what is noble,
       what is pure, and what is true
       could always go on.
@@ -1657,6 +1723,36 @@ context 'Tables' do
 
       output = convert_string_to_embedded input, safe: :safe, base_dir: testdir
       assert_match(/included content/, output)
+    end
+
+    test 'error about unresolved preprocessor directive on first line of an AsciiDoc table cell should have correct cursor' do
+      begin
+        tmp_include = Tempfile.new %w(include- .adoc)
+        tmp_include_dir, tmp_include_path = File.split tmp_include.path
+        tmp_include.write <<~'EOS'
+        |===
+        |A |B
+
+        |text
+        a|include::does-not-exist.adoc[]
+        |===
+        EOS
+        tmp_include.close
+        input = <<~EOS
+        first
+
+        include::#{tmp_include_path}[]
+
+        last
+        EOS
+        using_memory_logger do |logger|
+          output = convert_string_to_embedded input, safe: :safe, base_dir: tmp_include_dir
+          assert_includes output, %(Unresolved directive in #{tmp_include_path})
+          assert_message logger, :ERROR, %(#{tmp_include_path}: line 5: include file not found: #{File.join tmp_include_dir, 'does-not-exist.adoc'}), Hash
+        end
+      ensure
+        tmp_include.close!
+      end
     end
 
     test 'cross reference link in an AsciiDoc table cell should resolve to reference in main document' do
